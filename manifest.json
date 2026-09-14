@@ -1,0 +1,9 @@
+{
+  "name": "Shockwave",
+  "short_name": "Shockwave",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "lang": "nl"
+}
