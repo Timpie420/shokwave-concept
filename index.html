@@ -2,22 +2,124 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shockwave Concept</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Shockwave</title>
+  <link rel="manifest" href="/manifest.json" />
   <style>
-    :root { color-scheme: dark; }
-    body { margin:0; min-height:100vh; font-family: system-ui, sans-serif; background:#0b0d10; color:#e8edf2; display:grid; place-items:center; }
-    main { max-width: 36rem; padding: 2rem; }
-    h1 { font-size: 2rem; letter-spacing: .04em; margin: 0 0 .5rem; }
-    p { color:#a9b4c0; line-height:1.5; }
-    .tag { display:inline-block; border:1px solid #2a3540; border-radius:999px; padding:.25rem .7rem; font-size:.8rem; color:#8fd3ff; margin-bottom:1rem; }
+    :root { color-scheme: dark; --bg:#07090c; --card:#12161c; --line:#26303a; --txt:#e8edf2; --mut:#8b97a3; --acc:#6ee7ff; --warn:#ffb020; --hit:#ff5a6a; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--txt); min-height:100dvh; }
+    header { padding:1rem 1rem .4rem; }
+    header h1 { margin:0; font-size:1.35rem; letter-spacing:.08em; text-transform:uppercase; }
+    header p { margin:.25rem 0 0; color:var(--mut); font-size:.85rem; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:.7rem; padding:1rem; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:.9rem; }
+    .card.wide { grid-column:1 / -1; }
+    .k { color:var(--mut); font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; }
+    .v { font-variant-numeric: tabular-nums; font-size:1.35rem; margin-top:.2rem; }
+    .bar { height:8px; background:#1b222a; border-radius:99px; overflow:hidden; margin-top:.6rem; }
+    .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--acc),var(--hit)); }
+    .row { display:flex; gap:.6rem; flex-wrap:wrap; }
+    button { appearance:none; border:1px solid var(--line); background:#1a2129; color:var(--txt); border-radius:12px; padding:.7rem 1rem; font-weight:600; }
+    button.pri { background:var(--acc); color:#061016; border-color:transparent; }
+    button.danger { background:#3a1518; border-color:#5a2228; color:#ffc4ca; }
+    button:disabled { opacity:.45; }
+    #status { font-size:.8rem; color:var(--mut); padding:0 1rem; min-height:1.2rem; }
+    ul { list-style:none; margin:0; padding:0; max-height:42vh; overflow:auto; }
+    li { border-top:1px solid var(--line); padding:.55rem 0; display:flex; justify-content:space-between; gap:.6rem; font-size:.86rem; }
+    .hit { color:var(--hit); }
+    .ok { color:var(--acc); }
   </style>
 </head>
 <body>
-  <main>
-    <div class="tag">Vercel · GitHub · live</div>
-    <h1>Shockwave Concept</h1>
-    <p>Pipeline staat. Volgende stap: echte app-content hierin zetten.</p>
-  </main>
+  <header>
+    <h1>Shockwave</h1>
+    <p>Impact- en tril-logger voor e-skate.</p>
+  </header>
+  <div id="status">Klaar. Zet sensoren aan voor een rit.</div>
+  <section class="grid">
+    <div class="card"><div class="k">G-kracht</div><div class="v" id="g">0.00</div><div class="bar"><i id="gbar"></i></div></div>
+    <div class="card"><div class="k">Piek</div><div class="v" id="peak">0.00</div></div>
+    <div class="card"><div class="k">Hits</div><div class="v" id="hits">0</div></div>
+    <div class="card"><div class="k">GPS</div><div class="v" id="gps">—</div></div>
+    <div class="card wide">
+      <div class="row">
+        <button class="pri" id="start">Start rit</button>
+        <button id="stop" disabled>Stop</button>
+        <button class="danger" id="clear">Wis log</button>
+      </div>
+    </div>
+    <div class="card wide">
+      <div class="k">Log</div>
+      <ul id="log"></ul>
+    </div>
+  </section>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const KEY = "shockwave-log-v1";
+    let running = false, peak = 0, hits = 0, lastHit = 0, watchId = null, pos = null;
+    let log = JSON.parse(localStorage.getItem(KEY) || "[]");
+    function renderLog() {
+      $("log").innerHTML = log.slice(0, 80).map((e) =>
+        `<li><span class="${e.g >= 3 ? "hit" : "ok"}">${e.t} · ${e.g.toFixed(2)} g</span><span>${e.gps || "geen gps"}</span></li>`
+      ).join("") || "<li>Nog geen slagen.</li>";
+      $("hits").textContent = hits;
+      $("peak").textContent = peak.toFixed(2);
+    }
+    function save() { localStorage.setItem(KEY, JSON.stringify(log.slice(0, 400))); }
+    function add(g) {
+      const gps = pos ? `${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}` : "";
+      log.unshift({ t: new Date().toLocaleTimeString("nl-BE"), g, gps });
+      hits += 1; save(); renderLog();
+    }
+    function onMotion(ev) {
+      if (!running) return;
+      const a = ev.accelerationIncludingGravity || ev.acceleration;
+      if (!a) return;
+      const g = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2) / 9.81;
+      $("g").textContent = g.toFixed(2);
+      $("gbar").style.width = Math.min(100, g / 8 * 100) + "%";
+      if (g > peak) peak = g;
+      $("peak").textContent = peak.toFixed(2);
+      const now = Date.now();
+      if (g >= 2.4 && now - lastHit > 650) { lastHit = now; add(g); }
+    }
+    async function start() {
+      $("status").textContent = "Sensoren vragen…";
+      try {
+        if (typeof DeviceMotionEvent !== "undefined" && DeviceMotionEvent.requestPermission) {
+          const p = await DeviceMotionEvent.requestPermission();
+          if (p !== "granted") throw new Error("motion geweigerd");
+        }
+        window.addEventListener("devicemotion", onMotion);
+        if (navigator.geolocation) {
+          watchId = navigator.geolocation.watchPosition(
+            (r) => { pos = { lat: r.coords.latitude, lng: r.coords.longitude }; $("gps").textContent = "aan"; },
+            () => { $("gps").textContent = "nee"; },
+            { enableHighAccuracy: true, maximumAge: 2000 }
+          );
+        }
+        running = true; $("start").disabled = true; $("stop").disabled = false;
+        $("status").textContent = "Rit actief. Telefoon vast op het board.";
+      } catch (e) {
+        $("status").textContent = "Geen motion-toegang: " + e.message;
+      }
+    }
+    function stop() {
+      running = false;
+      window.removeEventListener("devicemotion", onMotion);
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      $("start").disabled = false; $("stop").disabled = true;
+      $("status").textContent = "Gestopt. Log blijft op dit toestel.";
+    }
+    $("start").onclick = start;
+    $("stop").onclick = stop;
+    $("clear").onclick = () => { log = []; hits = 0; peak = 0; save(); renderLog(); };
+    hits = log.filter(e => e.g >= 2.4).length;
+    peak = log.reduce((m, e) => Math.max(m, e.g), 0);
+    renderLog();
+  </script>
 </body>
 </html>
